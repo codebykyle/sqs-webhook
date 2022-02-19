@@ -39,13 +39,13 @@ namespace SqsWebhook
     class Program
     {
         const string JsonFile = "appsettings.json";
-        private const int DefaultPollDelay = 6000;
+        private const int DefaultPollDelay = 60000;
         private const string DefaultHttpMethod = "POST";
+        private const int DefaultMaxMessages = 5;
 
         static async Task Main(string[] args)
         {
             Console.WriteLine("Loading Configuration");
-
 
             var config = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -54,16 +54,17 @@ namespace SqsWebhook
                 .Build();
 
             // Load settings
-            string applicationName = GetConfigurationValue(config, "APP_NAME", true, "Sqs to HTTP");
+            string applicationName = GetConfigurationValue(config, "APP_NAME", true, "SQS to HTTP");
             string sqsAccessKey = GetConfigurationValue(config, "SQS_ACCESS_KEY_ID", true);
             string sqsSecretAccessKey = GetConfigurationValue(config, "SQS_SECRET_ACCESS_KEY", true);
             string sqsQueueUrl = GetConfigurationValue(config, "SQS_QUEUE_URL", true);
             int pollDelay = GetConfigurationValueAsNumber(config, "POLL_DELAY", false, DefaultPollDelay);
-            int maxMessages = GetConfigurationValueAsNumber(config, "MAX_MESSAGES", false, 5);
+            int maxMessages = GetConfigurationValueAsNumber(config, "MAX_MESSAGES", false, DefaultMaxMessages);
             string httpUrl = GetConfigurationValue(config, "HTTP_URL", true);
             string httpMethod = GetConfigurationValue(config, "HTTP_METHOD", false, DefaultHttpMethod);
-            string errorUrl = GetConfigurationValue(config, "ERROR_URL", false, null);
+            string errorUrl = GetConfigurationValue(config, "ERROR_URL", false);
             string headerFile = GetConfigurationValue(config, "HEADER_FILE", false, "config/headers.json");
+            string headerErrorFile = GetConfigurationValue(config, "HEADER_ERROR_FILE", false, "config/headers_error.json");
             
             Console.WriteLine("Loaded");
             Console.WriteLine($"Running. Poll delay: {pollDelay}");
@@ -83,6 +84,12 @@ namespace SqsWebhook
 
                 var messageResponse = await sqsClient.ReceiveMessageAsync(messageRequest);
 
+                if (messageResponse.Messages.Count > 0)
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine($"Messages Discovered: { messageResponse.Messages.Count }");    
+                }
+                
                 foreach (var message in messageResponse.Messages)
                 {
                     var jsonBody = JsonNode.Parse(message.Body);
@@ -91,7 +98,7 @@ namespace SqsWebhook
                         httpUrl,
                         jsonBody?.ToJsonString(), 
                         httpMethod,
-                        Loadheaders(headerFile)
+                        LoadHeaders(headerFile)
                     );
 
                     string serializedResponse = JsonSerializer.Serialize(response);
@@ -116,8 +123,7 @@ namespace SqsWebhook
                             errorUrl,
                             serializedErrorMessage,
                             "POST",
-                            null, // todo: We should have an error header file maybe...
-                            "application/json"
+                            LoadHeaders(headerErrorFile)
                         );
                         
                         Console.WriteLine("");
@@ -129,7 +135,8 @@ namespace SqsWebhook
             }
         }
 
-        public static ApplicationWebResult SendWebRequest(
+
+        private static ApplicationWebResult SendWebRequest(
             string url, 
             string body = null, 
             string method="POST",
@@ -147,10 +154,8 @@ namespace SqsWebhook
 
             if (body != null)
             {
-                using (StreamWriter writer = new StreamWriter(request.GetRequestStream()))
-                {
-                    writer.Write(body);
-                }
+                using StreamWriter writer = new StreamWriter(request.GetRequestStream());
+                writer.Write(body);
             }
             
             DateTime startTime = DateTime.Now;
@@ -158,23 +163,26 @@ namespace SqsWebhook
 
             DateTime endTime = DateTime.Now;
             string responseBody;
+            
             using (var streamReader = new StreamReader(response.GetResponseStream()))
             {
                 responseBody = streamReader.ReadToEnd();
             }
 
-            ApplicationWebResult obj = new ApplicationWebResult();
-            obj.Url = url;
-            obj.RequestTime = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
-            obj.ResponseTime = ((DateTimeOffset)endTime).ToUnixTimeMilliseconds();
-            obj.RequestBody = body;
-            obj.ResponseBody = responseBody;
-            obj.StatusCode = (short)response.StatusCode;
-            
+            ApplicationWebResult obj = new ApplicationWebResult
+            {
+                Url = url,
+                RequestTime = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds(),
+                ResponseTime = ((DateTimeOffset)endTime).ToUnixTimeMilliseconds(),
+                RequestBody = body,
+                ResponseBody = responseBody,
+                StatusCode = (short)response.StatusCode
+            };
+
             return obj;
         }
 
-        public static WebHeaderCollection Loadheaders(string fromFile)
+        private static WebHeaderCollection LoadHeaders(string fromFile)
         {
             string fileContent = File.ReadAllText(fromFile);
 
@@ -182,25 +190,30 @@ namespace SqsWebhook
 
             WebHeaderCollection collection = new WebHeaderCollection();
 
-            foreach (KeyValuePair<string, string> obj in readItems)
+            if (readItems == null)
             {
-                collection.Add(obj.Key, obj.Value);
+                return collection;
             }
             
+            foreach ((string key, string value) in readItems)
+            {
+                collection.Add(key, value);
+            }
+
             return collection;
         }
-        
-        public static bool IsEmpty(string input)
+
+        private static bool IsEmpty(string input)
         {
             return string.IsNullOrEmpty(input);
         }
 
-        public static void ThrowEnvError(string keyName)
+        private static void ThrowEnvError(string keyName)
         {
             throw new Exception($"Environment Variable: {keyName} is required to have a value.");
         }
-        
-        public static string GetConfigurationValue(
+
+        private static string GetConfigurationValue(
             IConfigurationRoot configuration,
             string key,
             bool isRequired = false,
@@ -219,16 +232,14 @@ namespace SqsWebhook
             return section.Exists() ? section.Value : defaultValue;
         }
 
-        public static int GetConfigurationValueAsNumber(
+        private static int GetConfigurationValueAsNumber(
             IConfigurationRoot configuration,
             string key,
             bool isRequired = false,
             int defaultValue = -1
         )
         {
-            int pollDelay;
-
-            if (Int32.TryParse(GetConfigurationValue(configuration, key), out pollDelay))
+            if (int.TryParse(GetConfigurationValue(configuration, key), out int pollDelay))
             {
                 return pollDelay;
             }

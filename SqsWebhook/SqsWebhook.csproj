@@ -19,6 +19,15 @@
       <None Update="config\headers.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
+      <None Update="config\headers_error.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\readme.md">
+        <Link>readme.md</Link>
+      </Content>
     </ItemGroup>
 
 </Project>
