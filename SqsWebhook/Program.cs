@@ -21,6 +21,7 @@ namespace SqsWebhook
         public short StatusCode { set; get; }
         public string RequestBody { set; get; }
         public string ResponseBody { set; get;}
+        
         public bool IsSuccess
         {
             get
@@ -65,6 +66,7 @@ namespace SqsWebhook
             string errorUrl = GetConfigurationValue(config, "ERROR_URL", false);
             string headerFile = GetConfigurationValue(config, "HEADER_FILE", false, "config/headers.json");
             string headerErrorFile = GetConfigurationValue(config, "HEADER_ERROR_FILE", false, "config/headers_error.json");
+            bool deleteErrors = GetConfigurationAsBoolean(config, "DELETE_ERRORS", false, true);
             
             Console.WriteLine("Loaded");
             Console.WriteLine($"Running. Poll delay: {pollDelay}");
@@ -89,8 +91,8 @@ namespace SqsWebhook
                     Console.WriteLine("");
                     Console.WriteLine($"Messages Discovered: { messageResponse.Messages.Count }");    
                 }
-                
-                foreach (var message in messageResponse.Messages)
+
+                foreach (Message message in messageResponse.Messages)
                 {
                     var jsonBody = JsonNode.Parse(message.Body);
                     
@@ -107,7 +109,9 @@ namespace SqsWebhook
                     Console.WriteLine(serializedResponse);
                     Console.WriteLine("");
 
-                    if (!response.IsSuccess && !string.IsNullOrEmpty(errorUrl))
+                    bool isError = !response.IsSuccess && !string.IsNullOrEmpty(errorUrl);
+                    
+                    if (isError)
                     {
                         ApplicationErrorMessage errorMessage = new ApplicationErrorMessage()
                         {
@@ -127,14 +131,34 @@ namespace SqsWebhook
                             "POST",
                             LoadHeaders(headerErrorFile)
                         );
+
+                        if (deleteErrors)
+                        {
+                            await DeleteMessage(sqsQueueUrl, message, sqsClient);    
+                        }
                         
                         Console.WriteLine("");
                     }
+                    else
+                    {
+                        await DeleteMessage(sqsQueueUrl, message, sqsClient);
+                    }
                 }
 
-                Console.WriteLine($"Delaying {pollDelay}");
+                
                 Thread.Sleep(pollDelay);
             }
+        }
+
+        private static async Task DeleteMessage(string sqsQueueUrl, Message message, AmazonSQSClient sqsClient)
+        {
+            DeleteMessageRequest deleteMessageRequest = new DeleteMessageRequest()
+            {
+                QueueUrl = sqsQueueUrl,
+                ReceiptHandle = message.ReceiptHandle
+            };
+
+            await sqsClient.DeleteMessageAsync(deleteMessageRequest);
         }
 
 
@@ -224,7 +248,7 @@ namespace SqsWebhook
         {
             throw new Exception($"Environment Variable: {keyName} is required to have a value.");
         }
-
+        
         private static string GetConfigurationValue(
             IConfigurationRoot configuration,
             string key,
@@ -257,6 +281,26 @@ namespace SqsWebhook
             }
 
             if (isRequired && defaultValue == -1)
+            {
+                ThrowEnvError(key);
+            }
+            
+            return defaultValue;
+        }
+        
+        private static bool GetConfigurationAsBoolean(
+            IConfigurationRoot configuration,
+            string key,
+            bool isRequired = false,
+            bool defaultValue = false
+        )
+        {
+            if (bool.TryParse(GetConfigurationValue(configuration, key), out bool result))
+            {
+                return result;
+            }
+
+            if (isRequired)
             {
                 ThrowEnvError(key);
             }
