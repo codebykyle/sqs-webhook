@@ -1,0 +1,4 @@
+﻿{
+  "X-Custom-Header": "Hello, World!",
+  "X-Custom-Header2": "Hello, World 2!"
+}
