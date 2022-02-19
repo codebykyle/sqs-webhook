@@ -13,9 +13,6 @@ TBD.
 
 ## Envrionment Variables
 
-
-
-
 | Variable              | Required | Description                                                                                                                                                                                 | Default Value             |
 |-----------------------|:--------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------------|
 | SQS_ACCESS_KEY_ID     |    ✔     | A AWS IAM API Access Key ID with privileges to access the queue                                                                                                                             |                           |
@@ -39,3 +36,21 @@ If you have your SQS settings configured to support a dead-letter queue, message
 You may also want to receive a notification for when a webhook receives a non-200 response in order to detect potential issues with this script. You can set the `ERROR_URL` envrionment variable, which will send a POST request
 to that URL, along with some information about the request and response.
 
+The body of the POST request contains a JSON object, which contains the raw request and response, as well as the request time in a millisecond timestamp:
+
+```json
+{
+  "ApplicationName": "SQS to HTTP",
+  "Result": {
+    "Url": "https://postman-echo.com/put",
+    "RequestTime": 1645269350720,
+    "ResponseTime": 1645269351012,
+    "StatusCode": 404,
+    "RequestBody": "{\u0022test\u0022:\u0022hello!\u0022}",
+    "ResponseBody": "",
+    "IsSuccess": false
+  }
+}
+```
+
+If the `DELETE_ERRORS` environment variable is set to `False`, the application will retry the object until it falls off the SQS Queue.

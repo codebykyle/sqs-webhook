@@ -32,8 +32,8 @@ namespace SqsWebhook
 
     class ApplicationErrorMessage
     {
-        public string ApplicationName;
-        public ApplicationWebResult Result;
+        public string ApplicationName { set; get; }
+        public ApplicationWebResult Result { set; get; }
     }
     
     class Program
@@ -102,6 +102,8 @@ namespace SqsWebhook
                     );
 
                     string serializedResponse = JsonSerializer.Serialize(response);
+                    
+                    Console.WriteLine("Received Response:");
                     Console.WriteLine(serializedResponse);
                     Console.WriteLine("");
 
@@ -159,7 +161,17 @@ namespace SqsWebhook
             }
             
             DateTime startTime = DateTime.Now;
-            HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+            HttpWebResponse response;
+            
+            try
+            {
+                response = (HttpWebResponse)request.GetResponse();
+            }
+            catch (WebException e)
+            {
+                response = (HttpWebResponse)e.Response;
+            }
+            
 
             DateTime endTime = DateTime.Now;
             string responseBody;
