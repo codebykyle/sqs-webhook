@@ -5,6 +5,8 @@ This project polls an SQS queue for items, and sends the body of the message as 
 Combined with a lambda  function, which pushes items into the SQS queue, this can be a tool used to synchronize remote, internet facing messages
 to a local computer for processing, or moving information between isolated compute environments.
 
+Also See:
+- [Lambda to SQS](https://github.com/codebykyle/lambda-to-sqs)
 
 ## Usage
 
