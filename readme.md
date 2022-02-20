@@ -2,7 +2,7 @@
 
 This project polls an SQS queue for items, and sends the body of the message as a web request to a URL specified in the configuration.
 
-Combined with a lambda  function, which pushes items into the SQS queue, this can be a tool used to synchronoise remote, internet facing messages
+Combined with a lambda  function, which pushes items into the SQS queue, this can be a tool used to synchronize remote, internet facing messages
 to a local computer for processing, or moving information between isolated compute environments.
 
 
